@@ -1,0 +1,15 @@
+pub const MAIN_RAM_IN_BYTE: u16 = 1024*8;
+pub const VIDEO_RAM_IN_BYTE: u16 = 1024*8;
+pub const RESOLUTION: (u16, u16) = (160, 144);
+pub const MAX_SPRITE_SIZE: (u16, u16) = (8, 16);
+pub const MIN_SPRITE_SIZE: (u16, u16) = (8, 8);
+pub const CLOCK_SPEED_IN_HERZ: f64 = 4_194_304.;
+pub const CLOCK_CYCLE_IN_SECONDS: f64 = 1. / CLOCK_SPEED_IN_HERZ;
+pub const MACHINE_CYCLE_IN_SECONDS: f64 = CLOCK_CYCLE_IN_SECONDS / (CLOCK_CYCLE_PER_MACHINE_CYCLE as f64);
+pub const CLOCK_CYCLE_PER_MACHINE_CYCLE: u16 = 4;
+pub const HSYNC_IN_HERZ: f64 = 9_198_000.;
+pub const HSYNC_IN_SECONDS: f64 = 1. / HSYNC_IN_HERZ;
+pub const VSYNC_IN_HERZ: f64 = 59.73;
+pub const VSYNC_IN_SECONDS: f64 = 1. / VSYNC_IN_HERZ;
+
+
