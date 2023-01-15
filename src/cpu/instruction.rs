@@ -1,24 +1,11 @@
 use super::opcodes::*;
+use super::read_next;
 
 pub struct Instruction {
   pub op: OPCode,
   pub length: u8,
   pub cycles: u8,
 }
-
-
-fn read_from_offset<T: Copy>(memory: &[u8], offset: usize) -> T {
-  unsafe {*(memory[offset..].as_ptr() as *const T)}
-}
-
-fn read_next<T: Copy>(memory: &[u8]) -> T {
-  read_from_offset(memory, 0)
-}
-
-fn read_after_opcode<T: Copy>(memory: &[u8]) -> T {
-  read_from_offset(memory, 1)
-}
-
 
 impl Instruction {
   pub fn read(stack: &[u8]) -> Self {
@@ -185,12 +172,12 @@ impl Instruction {
       0..=3 => {
         let dir = if packed_op & 1 == 0 { ShiftDir::Left } else { ShiftDir::Right };
         let with_carry = packed_op & 2 != 0;
-        Self { op: OPCode::Rotate { dir, with_carry, var_or_arith: None }, length: 1, cycles: 4 }
+        Self { op: OPCode::Rotate { dir, with_carry }, length: 1, cycles: 4 }
       },
       4 => Self { op: OPCode::DAA, length: 1, cycles: 4 },
       5 => Self { op: OPCode::CPL, length: 1, cycles: 4 },
-      6 => Self { op: OPCode::BitMutation(BitMut::Set, RegisterBit::Carry), length: 1, cycles: 4 },
-      7 => Self { op: OPCode::BitMutation(BitMut::Flip, RegisterBit::Carry), length: 1, cycles: 4 },
+      6 => Self { op: OPCode::MutCarryFlag(BitMut::Set), length: 1, cycles: 4 },
+      7 => Self { op: OPCode::MutCarryFlag(BitMut::Flip), length: 1, cycles: 4 },
       8.. => Err(opcode).expect("Unreachable")
     }
   }
@@ -209,7 +196,10 @@ impl Instruction {
         0 => Self { length: 3, cycles: 4,
           op: OPCode::Jump { cond: None, add_cycles: 12, target: read_next::<u16>(memory).into() }
         },
-        1 => Self { op: OPCode::CB(Self::read_cb(memory)), length: 1, cycles: 4 }, // Prefix CB
+        1 => { // Prefix CB
+          let (op, length, cycles) = Self::read_cb(memory);
+          Self { op: OPCode::CB(op), length, cycles }
+        },
         2 | 3 => Self::unsupported(),
         4.. => Err(opcode).expect("Unreachable")
       },
@@ -363,7 +353,7 @@ impl Instruction {
       4.. => panic!("Expected to parse only values x in 0..4")
     }
   }
-  fn parse_bc_de_hl_af_reg(x: u8) -> (Var16, u8) {
+  fn _parse_bc_de_hl_af_reg(x: u8) -> (Var16, u8) {
     let (reg, cycles) = Self::parse_bc_de_hl_af_reg_raw(x);
     (Var16::ValReg(reg), cycles)
   }
@@ -391,8 +381,24 @@ impl Instruction {
     if x == 0 { None } else { Some(Self::parse_cond(x-1)) }
   }
 
-  fn read_cb(memory: &[u8]) -> CBPrefixedOPCode {
+  fn read_cb(memory: &[u8]) -> (CBPrefixedOPCode, u8, u8) {
     let opcode = memory[0];
-    todo!()
+    let (op_high, op_low) = (opcode / 8, opcode % 8);
+    let (reg, cycles) = Self::parse_b_c_d_e_h_l_hl_a(op_low);
+    let op = match op_high {
+      0 => CBPrefixedOPCode::Rotate { dir: ShiftDir::Left, with_carry: false, var: reg },
+      1 => CBPrefixedOPCode::Rotate { dir: ShiftDir::Right, with_carry: false, var: reg },
+      2 => CBPrefixedOPCode::Rotate { dir: ShiftDir::Left, with_carry: true, var: reg },
+      3 => CBPrefixedOPCode::Rotate { dir: ShiftDir::Right, with_carry: true, var: reg },
+      4 => CBPrefixedOPCode::Shift(ShiftDir::Left, reg),
+      5 => CBPrefixedOPCode::ShiftRightKeepMSB(reg),
+      6 => CBPrefixedOPCode::SwapNibbles(reg),
+      7 => CBPrefixedOPCode::Shift(ShiftDir::Right, reg),
+      8..=15 => CBPrefixedOPCode::BitMutation(BitMut::Test, (op_high-8).try_into().unwrap(), reg),
+      16..=23 => CBPrefixedOPCode::BitMutation(BitMut::Unset, (op_high-16).try_into().unwrap(), reg),
+      24..=31 => CBPrefixedOPCode::BitMutation(BitMut::Set, (op_high-24).try_into().unwrap(), reg),
+      32.. => Err(opcode).expect("Unreachable")
+    };
+    (op, 2, cycles*2)
   }
 }
