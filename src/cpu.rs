@@ -198,7 +198,19 @@ impl CPU {
         self.register.F.sub8(self.register.A, dst_val);
         true
       },
-      OPCode::DAA => true, //TODO
+      OPCode::DAA => {
+        let acc = &mut self.register.A;
+        let low_digit_full = *acc % 16;
+        let low_digit = low_digit_full % 10;
+        let low_digit_carry = low_digit_full / 10 | (if self.register.F.contains(FlagRegister::H) {1} else {0});
+        let high_digit_full = *acc / 16 + low_digit_carry;
+        let high_digit = high_digit_full % 10;
+        let high_digit_carry = high_digit_full / 10 | (if self.register.F.contains(FlagRegister::C) {1} else {0});
+        let new_carry = high_digit_carry > 0;
+        *acc = high_digit * 16 + low_digit;
+        self.register.F.set_flags(Some(*acc == 0), None, Some(false), Some(new_carry)); //TODO: Set Z-flag if new_carry is set??
+        true
+      },
       OPCode::CPL => {
         self.register.A ^= 0xFF; 
         self.register.F.set_flags(None, Some(true), Some(true), None);
